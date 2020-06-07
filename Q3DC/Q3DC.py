@@ -342,6 +342,7 @@ class Q3DCWidget(ScriptedLoadableModuleWidget):
             if self.anatomical_legend is None:
                 self.anatomical_legend = slicer.vtkMRMLTableNode()
                 self.anatomical_legend.SetSaveWithScene(False)
+                self.anatomical_Legend.SetLocked(True)
                 slicer.mrmlScene.AddNode(self.anatomical_legend)
                 self.anatomical_legend.SetAttribute('Q3DC.is_anatomical_legend', 'True')
 
@@ -404,9 +405,22 @@ class Q3DCWidget(ScriptedLoadableModuleWidget):
         name = self.anatomical_legend.GetCellText(row_index, 0)
         description = self.anatomical_legend.GetCellText(row_index, 1)
 
+        print('about to change fid point name')
         # Set the name and description of the selected point.
         fidList.SetNthControlPointLabel(fid_index, name)
+        print('just changed fid point name')
         fidList.SetNthControlPointDescription(fid_index, description)
+
+        # Update the landmark combo box to reflect the name change.
+        self.logic.updateLandmarkComboBox(fidList, self.landmarkComboBox, False)
+
+        # Update the cached point names (landmark labels) in the JSON data.
+        landmarkDescription = self.logic.decodeJSON(fidList.GetAttribute('landmarkDescription'))
+        landmarkDescription[selectedFidReflID]["landmarkLabel"] = name
+        fidList.SetAttribute('landmarkDescription', self.logic.encodeJSON(landmarkDescription))
+
+        # TODO: Rename midpoints to reflect the new names of their corresponding end points.
+        # This will require some sort of graph algorithm. BFS?
 
     def onModelChanged(self):
         print("-------Model Changed--------")
