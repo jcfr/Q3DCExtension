@@ -395,6 +395,7 @@ class Q3DCWidget(ScriptedLoadableModuleWidget):
             # code would run correctly if we continued but wouldn't do anything
             return
         fid_index = fidList.GetNthControlPointIndexByID(selectedFidReflID)
+        old_name = fidList.GetNthControlPointLabel(fid_index)
 
         # Look in the legend for the info from the selected row.
         selected_indices = self.anatomical_legend_view.selectedIndexes()
@@ -405,22 +406,32 @@ class Q3DCWidget(ScriptedLoadableModuleWidget):
         name = self.anatomical_legend.GetCellText(row_index, 0)
         description = self.anatomical_legend.GetCellText(row_index, 1)
 
-        print('about to change fid point name')
-        # Set the name and description of the selected point.
-        fidList.SetNthControlPointLabel(fid_index, name)
-        print('just changed fid point name')
-        fidList.SetNthControlPointDescription(fid_index, description)
-
-        # Update the landmark combo box to reflect the name change.
-        self.logic.updateLandmarkComboBox(fidList, self.landmarkComboBox, False)
+        # Refuse to create multiple fiducials with the same name.
+        for i in range(fidList.GetNumberOfControlPoints()):
+            if name == fidList.GetNthControlPointLabel(i):
+                return
 
         # Update the cached point names (landmark labels) in the JSON data.
         landmarkDescription = self.logic.decodeJSON(fidList.GetAttribute('landmarkDescription'))
         landmarkDescription[selectedFidReflID]["landmarkLabel"] = name
         fidList.SetAttribute('landmarkDescription', self.logic.encodeJSON(landmarkDescription))
 
-        # TODO: Rename midpoints to reflect the new names of their corresponding end points.
-        # This will require some sort of graph algorithm. BFS?
+        # Set the name and description of the selected point.
+        print('about to change fid point name')
+        fidList.SetNthControlPointLabel(fid_index, name)
+        print('just changed fid point name')
+        fidList.SetNthControlPointDescription(fid_index, description)
+
+        # Update the landmark combo boxes to reflect the name change.
+        self.logic.updateLandmarkComboBox(fidList, self.landmarkComboBox, False)
+        self.landmarkComboBox.setCurrentText(name)
+        for box in (self.landmarkComboBox1, self.landmarkComboBox2):
+            new_selection = box.currentText
+            if new_selection == old_name:
+                new_selection = name
+            self.logic.updateLandmarkComboBox(fidList, box)
+            box.setCurrentText(new_selection)
+        self.UpdateInterface()
 
     def onModelChanged(self):
         print("-------Model Changed--------")
@@ -1132,7 +1143,14 @@ class Q3DCLogic(ScriptedLoadableModuleLogic):
                     landmarkDescription[midPointID]["projection"]["closestPointIndex"] = \
                         self.projectOnSurface(hardenModel, fidList, midPointID)
                     fidList.SetAttribute("landmarkDescription",self.encodeJSON(landmarkDescription))
+                label1 = landmarkDescription[landmark1ID]['landmarkLabel']
+                label2 = landmarkDescription[landmark2ID]['landmarkLabel']
+                name = f'{label1}_{label2}'
+                fidList.SetNthControlPointLabel(index, name)
+                landmarkDescription[midPointID]['landmarkLabel'] = name
+                fidList.SetAttribute('landmarkDescription', self.encodeJSON(landmarkDescription))
                 self.updateMidPoint(fidList, midPointID)
+                landmarkDescription = self.decodeJSON(fidList.GetAttribute("landmarkDescription"))
 
     # Called when a landmarks is moved
     def onPointModifiedEvent(self, obj, event):
